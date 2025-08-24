@@ -2,7 +2,43 @@ import turtle
 import math
 
 def pentagon():  #this is a function for a cleaning a pentagon shaped room 
-    print("This is under progress...")
+    print("----------Pentagon Room Cleaning---------- \n")
+    n=int(input("Enter Length of pentagon room side: \n"))
+    vc= turtle.Turtle()
+    vc.shape("classic")
+    vc.hideturtle()
+    vc.speed(0)
+    wn= turtle.Screen()
+    wn.bgcolor("Orange")
+    vc.color("green","red")
+    vc.setheading(288)
+    vc.penup()
+    vc.fd(100)
+    vc.pendown()
+    vc.setheading(72)
+    vc.showturtle()
+    vc.speed(3)
+    i=0
+    x=10
+    num=(n/x)
+    x=(x*num)/10
+      
+    while x<n:
+      
+        for j in range(6):
+          vc.fd(n-x)
+          vc.left(72)
+        vc.left(45)
+        vc.fd(n/10)
+        vc.right(45)
+        x=x+num
+    vc.penup() 
+    vc.setheading(305)
+    vc.fd(n)
+    vc.left(180)
+  
+  
+  
 
 
 
@@ -183,7 +219,7 @@ def vinput():
     vcinput=input("1-> Start \n 2-> Stop \n")
     if vcinput =="1":
         start()
-        return vcinput #returning whether the machine should start or stop
+        
     elif vcinput =="2":
         print("Machine has been stopped... Thank You")
     else:
