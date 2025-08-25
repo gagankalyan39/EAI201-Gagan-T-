@@ -122,39 +122,37 @@ def rectangle():  #this is a function which is used for both square and rectangl
 
 
 def circle(shape):   #this a circular movement of vacuum cleaner for a circular room
-    if shape=="2":
-        wn= turtle.Screen()
-        wn.bgcolor("orange")
-        vacuum= turtle.Turtle()
-        vacuum.shape("circle")
-        vacuum.color("purple")
-        a=200
-        b=-0.05
-        angle =0
-        vacuum.hideturtle()
-        vacuum.penup()
-        vacuum.fd(200)
-        vacuum.speed(3)
-        vacuum.showturtle()
-        vacuum.pendown()
-        vacuum.setheading(180)
-        vacuum.fd(200)
-        vacuum.setheading(360)
+    a=int(input("Enter the Radius for the Circular Room:- "))
+    wn= turtle.Screen()
+    wn.bgcolor("orange")
+    vacuum= turtle.Turtle()
+    vacuum.shape("circle")
+    vacuum.color("purple")
+    
+    b=-0.05
+    angle =0
+    vacuum.hideturtle()
+    vacuum.penup()
+    vacuum.fd(a)
+    vacuum.speed(3)
+    vacuum.showturtle()
+    vacuum.pendown()
+    vacuum.setheading(180)
+    vacuum.fd(a)
+    vacuum.setheading(360)
+    
+    while True:
         
-        while True:
-            
-            r = a + b * angle
-            if r <= 0:  # stop when center is reached
-                break
-            x = r * math.cos(math.radians(angle))
-            y = r * math.sin(math.radians(angle))
-            vacuum.goto(x, y)
-            angle += 5 
-        vacuum.speed(6)   
-        vacuum.fd(200)
-    else:
-            print("its still on progress!!!")
-
+        r = a + b * angle
+        if r <= 0:  # stop when center is reached
+            break
+        x = r * math.cos(math.radians(angle))
+        y = r * math.sin(math.radians(angle))
+        vacuum.goto(x, y)
+        angle += 5 
+    vacuum.speed(1) 
+    vacuum.fd(a)
+        
 
 
 def Direct(shape): #this is used for calling different functions according to their shapes 
