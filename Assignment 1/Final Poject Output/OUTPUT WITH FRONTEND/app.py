@@ -1,133 +1,122 @@
-# app.py
-
 import collections
 import heapq
 import math
 from flask import Flask, jsonify, request, render_template
 
 # ====================================================================
-# 1. CAMPUS ENVIRONMENT MODELING
+# 1. CAMPUS GEOMETRY AND DATA
 # =====================================================================
 
-# Our main campus map. Each spot (key) links to other places (value)
-# The value is a list of tuples: (neighbour, distance in meters, speed_factor)
+# This graph defines all the locations and connections on the campus.
+# Each key is a point, and its value is a list of its neighbors.
+# The tuples are (destination_node, distance_in_meters, speed_factor).
 campus_graph = {
-    # Entry Gate is only for entering. One way traffic, you know.
-    'Entry Gate': [('Security Gate', 180, 1.0)],
-
-    # Exit Gate is only for exiting. No entry from here.
-    'Exit Gate': [('Security Gate', 180, 1.0)],
-
-    # Security Gate is the main checkpoint. Sab kuch yahi se control hota hai.
+    'Entry Gate': [('Security Gate', 200, 1.0)],
+    'Exit Gate': [('Security Gate', 170, 1.0)],
     'Security Gate': [
-        ('Entry Gate', 180, 1.0),
-        ('Exit Gate', 180, 1.0),
-        ('Flag Post', 50, 1.0)
+        ('Entry Gate', 200, 1.0),
+        ('Exit Gate', 170, 1.0),
+        ('Flag Post', 60, 1.0)
     ],
-    'Flag Post': [('Security Gate', 50, 1.0), ('Academic Block 1 Entrance', 210, 1.0)],
-
-    # NEW INTERNAL NODES FOR ACADEMIC BLOCK 1
-    # Academic Block 1 - our main hub. So many places inside this one building!
+    'Flag Post': [('Security Gate', 60, 1.0), ('Academic Block 1 Entrance', 220, 1.0)],
+    
+    # Internal nodes for Academic Block 1.
     'Academic Block 1 Entrance': [
-        ('Flag Post', 210, 1.0),
-        ('Lawn Area', 140, 1.0),
-        # Distances are 0 because they are inside the same building.
-        ('Library', 0, 1.0),
-        ('Auditorium', 0, 1.0),
-        ('Admissions', 50, 1.0),
-        ('Registrar Office', 60, 1.0),
-        ('Cafeteria', 10, 1.0)
+        ('Flag Post', 220, 1.0),
+        ('Lawn Area', 130, 1.0),
+        ('Library', 5, 1.0),
+        ('Auditorium', 10, 1.0),
+        ('Admissions', 55, 1.0),
+        ('Registrar Office', 70, 1.0),
+        ('Cafeteria', 15, 1.0)
     ],
-    # Direct connect to Auditorium for quick access. Super convenient!
     'Library': [
-        ('Academic Block 1 Entrance', 0, 1.0),
-        ('Auditorium', 15, 1.0)
-    ],
-    'Auditorium': [
-        ('Academic Block 1 Entrance', 0, 1.0),
-        ('Library', 15, 1.0),
-        ('Cafeteria', 20, 1.0)
-    ],
-    'Admissions': [('Academic Block 1 Entrance', 50, 1.0)],
-    'Registrar Office': [
-        ('Academic Block 1 Entrance', 60, 1.0),
-        ('Finance Dept', 10, 1.0)
-    ],
-    'Finance Dept': [
-        ('Registrar Office', 10, 1.0),
-        ('Academic Block 1 Entrance', 70, 1.0)
-    ],
-    'Cafeteria': [
-        ('Academic Block 1 Entrance', 10, 1.0),
-        ('Academic Block 2', 50, 1.0),
+        ('Academic Block 1 Entrance', 5, 1.0),
         ('Auditorium', 20, 1.0)
     ],
+    'Auditorium': [
+        ('Academic Block 1 Entrance', 10, 1.0),
+        ('Library', 20, 1.0),
+        ('Cafeteria', 25, 1.0)
+    ],
+    'Admissions': [('Academic Block 1 Entrance', 55, 1.0)],
+    'Registrar Office': [
+        ('Academic Block 1 Entrance', 70, 1.0),
+        ('Finance Dept', 12, 1.0)
+    ],
+    'Finance Dept': [
+        ('Registrar Office', 12, 1.0),
+        ('Academic Block 1 Entrance', 80, 1.0)
+    ],
+    'Cafeteria': [
+        ('Academic Block 1 Entrance', 15, 1.0),
+        ('Academic Block 2', 60, 1.0),
+        ('Auditorium', 25, 1.0)
+    ],
 
-    # REMAINING EXTERNAL NODES
-    # Remaining locations outside the main block.
-    'Lawn Area': [('Academic Block 1 Entrance', 140, 1.0), ('Academic Block 2', 140, 1.0)],
-    'Academic Block 2': [('Lawn Area', 140, 1.0), ('Cafeteria', 50, 1.0), ('Food Court', 240, 1.0), ('Hostel Building 2', 50, 1.0)],
-    'Hostel Building 2': [('Academic Block 2', 50, 1.0), ('Hostel Building 1', 240, 1.0), ('Food Court', 50, 1.0)],
-    'Food Court': [('Academic Block 2', 240, 1.0), ('Hostel Building 1', 120, 1.0)],
-    # Hostel to Exit Gate because everyone must exit from there.
-    'Hostel Building 1': [('Hostel Building 2', 240, 1.0), ('Food Court', 120, 1.0), ('Exit Gate', 400, 1.0)],
+    # The rest of the external campus locations.
+    'Lawn Area': [('Academic Block 1 Entrance', 130, 1.0), ('Academic Block 2', 150, 1.0)],
+    'Academic Block 2': [('Lawn Area', 150, 1.0), ('Cafeteria', 60, 1.0), ('Food Court', 250, 1.0), ('Hostel Building 2', 45, 1.0)],
+    'Hostel Building 2': [('Academic Block 2', 45, 1.0), ('Hostel Building 1', 250, 1.0), ('Food Court', 55, 1.0)],
+    'Food Court': [('Academic Block 2', 250, 1.0), ('Hostel Building 1', 130, 1.0)],
+    'Hostel Building 1': [('Hostel Building 2', 250, 1.0), ('Food Court', 130, 1.0), ('Exit Gate', 420, 1.0)],
 }
 
-# Co-ordinates for our A* search.
+# Co-ordinates for A* search, now mirrored on the x-axis.
 building_coords = {
     'Entry Gate': (0, -180),
-    'Exit Gate': (360, -180),
-    'Security Gate': (180, 0),
-    'Flag Post': (180, 50),
-    'Academic Block 1 Entrance': (180, 260),
-    'Library': (170, 260),
-    'Auditorium': (180, 260),
-    'Admissions': (180, 310),
-    'Registrar Office': (180, 320),
-    'Finance Dept': (190, 320),
-    'Cafeteria': (190, 260),
-    'Lawn Area': (180, 400),
-    'Academic Block 2': (180, 540),
-    'Food Court': (420, 540),
-    'Hostel Building 1': (660, 700),
-    'Hostel Building 2': (230, 600)
+    'Exit Gate': (-360, -180),
+    'Security Gate': (-180, 0),
+    'Flag Post': (-180, 50),
+    'Academic Block 1 Entrance': (-180, 260),
+    'Library': (-170, 260),
+    'Auditorium': (-180, 260),
+    'Admissions': (-180, 310),
+    'Registrar Office': (-180, 320),
+    'Finance Dept': (-190, 320),
+    'Cafeteria': (-190, 260),
+    'Lawn Area': (-180, 400),
+    'Academic Block 2': (-180, 540),
+    'Food Court': (-420, 540),
+    'Hostel Building 1': (-660, 700),
+    'Hostel Building 2': (-230, 600)
 }
 
-# A small dictionary with notes on each building.
+# Short descriptions for each location.
 building_info = {
-    'Entry Gate': "Main Entry Gate (A), on the right side of the main road.",
-    'Exit Gate': "Main Exit Gate (B), on the left side of the main road.",
-    'Security Gate': "Security Gate (C), the central checkpoint for all entry and exit from the campus.",
-    'Flag Post': "Campus Flag Post (D).",
-    'Academic Block 1 Entrance': "Main Entrance to Academic Block 1. This building is multi-story with lifts on both sides. The following internal locations can be found here.",
-    'Library': "Located in Academic Block 1 on the right side. It has a direct connection to the Auditorium.",
-    'Auditorium': "Located in Academic Block 1 on the underground (UG) floor. It has direct exits to both the Library and the Cafeteria.",
-    'Admissions': "Located in Academic Block 1 on the 1st floor, 50m from the entrance.",
-    'Registrar Office': "Located in Academic Block 1 on the 3rd floor, 60m from the entrance.",
-    'Finance Dept': "Located in Academic Block 1 on the 3rd floor, 10m from the Registrar Office.",
-    'Cafeteria': "Located in Academic Block 1 on the lower ground (LG) floor. This exit provides the internal connection to Academic Block 2 and the Auditorium.",
-    'Academic Block 2': "Academic Block 2 is a central hub in the upper part of the campus. It is connected to Academic Block 1 via the Cafeteria exit.",
-    'Lawn Area': "Open Lawn Area (E).",
-    'Hostel Building 2': "Hostel Building 2 (F).",
-    'Food Court': "Campus Food Court (G).",
-    'Hostel Building 1': "Hostel Building 1 (H).",
+    'Entry Gate': "Main campus entry point, on the right.",
+    'Exit Gate': "Main campus exit point, on the left.",
+    'Security Gate': "The central security checkpoint for all campus traffic.",
+    'Flag Post': "The campus flag post.",
+    'Academic Block 1 Entrance': "Main entrance to Academic Block 1, which houses several internal departments.",
+    'Library': "Located inside Academic Block 1 with easy access to the Auditorium.",
+    'Auditorium': "Found on the lower ground floor of Academic Block 1.",
+    'Admissions': "The Admissions office, located on the 1st floor of Academic Block 1.",
+    'Registrar Office': "The Registrar's Office on the 3rd floor of Academic Block 1.",
+    'Finance Dept': "The Finance Department, adjacent to the Registrar's Office.",
+    'Cafeteria': "An on-campus cafeteria with connections to Academic Block 2 and the Auditorium.",
+    'Academic Block 2': "A secondary academic hub in the northern part of the campus.",
+    'Lawn Area': "A large open lawn area.",
+    'Hostel Building 2': "One of the two main residential buildings.",
+    'Food Court': "The main campus food court.",
+    'Hostel Building 1': "One of the main residential buildings.",
 }
 
-# This is our walking speed, 1.4 meters per second. Thoda fast-fast chalenge.
-WALKING_SPEED_MPS = 1.4
+# Average walking speed.
+WALKING_SPEED_MPS = 1.35  # Slightly adjusted speed.
 
 def calculate_time(distance):
-    """Calculates walking time in minutes. Simple calculation, nothing too fancy."""
+    """Calculates estimated walking time in minutes based on distance."""
     time_seconds = distance / WALKING_SPEED_MPS
     return round(time_seconds / 60, 2)
 
 
-# 2. SEARCH ALGORITHM IMPLEMENTATIONS
-
+# ====================================================================
+# 2. PATHFINDING ALGORITHMS
+# ====================================================================
 
 def bfs(start, goal):
-    """BFS: breadth-first search. It's like exploring layer by layer, starting from the closest nodes."""
-    print("Starting BFS...")
+    """Breadth-First Search (BFS) explores the graph layer by layer."""
     queue = collections.deque([(start, [start], 0)])
     visited = {start}
     nodes_explored = 0
@@ -145,8 +134,7 @@ def bfs(start, goal):
     return None, 0, nodes_explored
 
 def dfs(start, goal):
-    """DFS: depth-first search. It goes deep into one path first, like a narrow lane."""
-    print("Starting DFS...")
+    """Depth-First Search (DFS) dives deep into a single path first."""
     stack = [(start, [start], 0)]
     visited = set()
     nodes_explored = 0
@@ -164,8 +152,7 @@ def dfs(start, goal):
     return None, 0, nodes_explored
 
 def ucs(start, goal):
-    """UCS: Uniform Cost Search. Finds the cheapest path. Not about distance, but total cost."""
-    print("Starting UCS...")
+    """Uniform Cost Search (UCS) finds the path with the lowest total cost."""
     priority_queue = [(0, start, [start])]
     visited_costs = {start: 0}
     nodes_explored = 0
@@ -183,8 +170,7 @@ def ucs(start, goal):
     return None, 0, nodes_explored
 
 def euclidean_distance(node1, node2):
-    """This is our A* heuristic. It estimates distance in a straight line, like a bird's flight path.
-    Helps A* to be super smart."""
+    """Calculates a straight-line distance, used as a heuristic for A*."""
     if node1 not in building_coords or node2 not in building_coords:
         return 0
     x1, y1 = building_coords[node1]
@@ -192,8 +178,7 @@ def euclidean_distance(node1, node2):
     return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
 def a_star(start, goal):
-    """A* Search: The best one! It combines path cost and heuristic to find the fastest way. Like a smart student."""
-    print("Starting A* Search...")
+    """A* Search combines cost with a heuristic for efficient pathfinding."""
     priority_queue = [(0 + euclidean_distance(start, goal), 0, start, [start])]
     visited_costs = {start: 0}
     nodes_explored = 0
@@ -211,16 +196,12 @@ def a_star(start, goal):
                 heapq.heappush(priority_queue, (new_f_cost, new_g_cost, neighbor, new_path))
     return None, 0, nodes_explored
 
-# A simple dictionary to map algorithm names to functions.
 algorithms = {
-    'BFS': bfs,
-    'DFS': dfs,
-    'UCS': ucs,
-    'A*': a_star
+    'BFS': bfs, 'DFS': dfs, 'UCS': ucs, 'A*': a_star
 }
 
 # ====================================================================
-# 3. WEB APP ROUTES AND API ENDPOINTS
+# 3. FLASK APPLICATION AND API ENDPOINTS
 # ====================================================================
 
 app = Flask(__name__)
@@ -250,7 +231,7 @@ def api_navigate():
 
     path_coords = [building_coords[loc] for loc in path if loc in building_coords]
     
-    # We will flip the y-coordinates for Leaflet's simple CRS
+    # Flip the y-coordinates for Leaflet's simple CRS
     flipped_coords = [(x, -y) for x, y in path_coords]
 
     directions = []
@@ -285,9 +266,6 @@ def api_buildings():
 
 if __name__ == "__main__":
     print("=====================================================")
-    print("       Welcome to Chanakya University! 🎓")
+    print("          Campus Navigation System Backend           ")
     print("=====================================================")
-    print("This server provides the backend for the campus navigation bot.")
-    print("Open your browser and navigate to http://127.0.0.1:5000")
-    print("-----------------------------------------------------")
     app.run(debug=True)
