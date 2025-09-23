@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Navigation Guide</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #e8f5e9;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 90%;
+            max-width: 1000px;
+            background-color: #fff;
+            padding: 30px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            text-align: center;
+        }
+        h1 {
+            color: #2e7d32;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .controls label {
+            font-weight: 500;
+            color: #555;
+        }
+        .controls select,
+        .controls button {
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid #c8e6c9;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .controls select:focus,
+        .controls button:focus {
+            outline: none;
+            border-color: #43a047;
+            box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
+        }
+        .controls button {
+            background-color: #4caf50;
+            color: white;
+            cursor: pointer;
+            border: none;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        }
+        .controls button:hover {
+            background-color: #388e3c;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transform: translateY(-2px);
+        }
+        #mapid {
+            height: 500px;
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            background-color: #f0f0f0;
+        }
+        #results {
+            margin-top: 25px;
+            padding: 20px;
+            background-color: #f1f8e9;
+            border-radius: 8px;
+            border: 1px solid #dcedc8;
+            color: #444;
+            text-align: left;
+        }
+        #results h3 {
+            margin-top: 0;
+            color: #2e7d32;
+            text-align: center;
+        }
+        .leaflet-tooltip {
+            background-color: #e8f5e9;
+            border-color: #4caf50;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+        .leaflet-marker-icon {
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+        }
+        .leaflet-marker-icon:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Chanakya University Navigation Guide</h1>
+        <div class="controls">
+            <label for="start-select">Start:</label>
+            <select id="start-select"></select>
+            <label for="goal-select">Destination:</label>
+            <select id="goal-select"></select>
+            <label for="algo-select">Algorithm:</label>
+            <select id="algo-select">
+                <option value="A*">A*</option>
+                <option value="UCS">UCS</option>
+                <option value="BFS">BFS</option>
+                <option value="DFS">DFS</option>
+            </select>
+            <button onclick="findPath()">Get Directions</button>
+        </div>
+        <div id="mapid"></div>
+        <div id="results">
+            <p style="text-align: center; color: #777;">Select your start and end points to get directions.</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('mapid', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2,
+            center: [0, 0],
+            zoom: 0,
+        });
+
+        const bounds = [[-700, -700], [700, 700]];
+        L.imageOverlay('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=YOUR_MAPBOX_ACCESS_TOKEN_HERE', bounds).addTo(map);
+        map.fitBounds(bounds);
+
+        let buildingsData = {};
+        let pathLine = null;
+        let buildingMarkers = {};
+
+        async function fetchBuildings() {
+            try {
+                const response = await fetch('/api/buildings');
+                const buildings = await response.json();
+                
+                const startSelect = document.getElementById('start-select');
+                const goalSelect = document.getElementById('goal-select');
+
+                startSelect.innerHTML = '<option value="">-- Start Location --</option>';
+                goalSelect.innerHTML = '<option value="">-- Destination --</option>';
+
+                buildings.forEach(building => {
+                    buildingsData[building.name] = building;
+                    const option1 = new Option(building.name, building.name);
+                    const option2 = new Option(building.name, building.name);
+                    startSelect.add(option1);
+                    goalSelect.add(option2);
+                    
+                    const marker = L.marker([building.coords[1], building.coords[0]]).addTo(map);
+                    marker.bindTooltip(building.name, { permanent: true, direction: 'right' });
+                });
+
+            } catch (error) {
+                console.error('Error fetching buildings:', error);
+                document.getElementById('results').innerHTML = `<p style="color:red;">Error: Could not connect to the backend.</p>`;
+            }
+        }
+
+        async function findPath() {
+            const start = document.getElementById('start-select').value;
+            const goal = document.getElementById('goal-select').value;
+            const algorithm = document.getElementById('algo-select').value;
+            const resultsDiv = document.getElementById('results');
+
+            if (!start || !goal) {
+                resultsDiv.innerHTML = `<p>Please select both a start and a goal location.</p>`;
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/navigate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ start, goal, algorithm })
+                });
+
+                const data = await response.json();
+
+                if (response.status !== 200) {
+                    resultsDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+                    return;
+                }
+
+                resultsDiv.innerHTML = `
+                    <h3>Route Found!</h3>
+                    <p><strong>Path:</strong> ${data.path.join(' &rarr; ')}</p>
+                    <p><strong>Total Distance:</strong> ${data.distance} meters</p>
+                    <p><strong>Est. Time:</strong> ${data.time} minutes</p>
+                    <p><strong>Algorithm:</strong> ${algorithm} (Nodes Explored: ${data.nodes_explored})</p>
+                    <h4>Directions:</h4>
+                    <ul>
+                        ${data.directions.map(dir => `<li>${dir}</li>`).join('')}
+                    </ul>
+                `;
+
+                if (pathLine) {
+                    map.removeLayer(pathLine);
+                }
+
+                const latlngs = data.path_coords.map(coord => [coord[1], coord[0]]);
+                pathLine = L.polyline(latlngs, {color: '#4caf50', weight: 6, opacity: 0.9 }).addTo(map);
+                map.fitBounds(pathLine.getBounds());
+
+            } catch (error) {
+                console.error('Error finding path:', error);
+                resultsDiv.innerHTML = `<p style="color:red;">An unexpected error occurred. Please check the console.</p>`;
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', fetchBuildings);
+    </script>
+</body>
+</html>
