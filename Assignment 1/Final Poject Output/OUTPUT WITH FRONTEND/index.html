@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campus Navigation Guide</title>
+    <title>Chanakya University Navigation Guide</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
         body {
@@ -105,6 +105,40 @@
         .leaflet-marker-icon:hover {
             transform: scale(1.1);
         }
+
+        /* Styles for new step-by-step display */
+        .path-step {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dcedc8;
+            padding-bottom: 20px;
+        }
+
+        .path-step:last-child {
+            border-bottom: none;
+        }
+
+        .step-image {
+            max-width: 150px;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .step-info {
+            flex: 1;
+        }
+
+        .step-info h4 {
+            margin-top: 0;
+            color: #2e7d32;
+        }
+        
+        .step-info p {
+            margin: 5px 0;
+        }
     </style>
 </head>
 <body>
@@ -132,6 +166,9 @@
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
+        // Capture the static_url passed from Flask
+        const STATIC_URL_PREFIX = "{{ static_url }}"; 
+
         const map = L.map('mapid', {
             crs: L.CRS.Simple,
             minZoom: -2,
@@ -140,8 +177,12 @@
             zoom: 0,
         });
 
-        const bounds = [[-700, -700], [700, 700]];
-        L.imageOverlay('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}?access_token=YOUR_MAPBOX_ACCESS_TOKEN_HERE', bounds).addTo(map);
+        // The image bounds are adjusted to fit the new coordinates.
+        const bounds = [[-750, -300], [750, 200]];
+        
+        // Use the Flask static URL to reference the campus map image
+        L.imageOverlay(STATIC_URL_PREFIX + 'campus_map.jpg', bounds).addTo(map);
+        
         map.fitBounds(bounds);
 
         let buildingsData = {};
@@ -203,18 +244,6 @@
                     return;
                 }
 
-                resultsDiv.innerHTML = `
-                    <h3>Route Found!</h3>
-                    <p><strong>Path:</strong> ${data.path.join(' &rarr; ')}</p>
-                    <p><strong>Total Distance:</strong> ${data.distance} meters</p>
-                    <p><strong>Est. Time:</strong> ${data.time} minutes</p>
-                    <p><strong>Algorithm:</strong> ${algorithm} (Nodes Explored: ${data.nodes_explored})</p>
-                    <h4>Directions:</h4>
-                    <ul>
-                        ${data.directions.map(dir => `<li>${dir}</li>`).join('')}
-                    </ul>
-                `;
-
                 if (pathLine) {
                     map.removeLayer(pathLine);
                 }
@@ -222,6 +251,46 @@
                 const latlngs = data.path_coords.map(coord => [coord[1], coord[0]]);
                 pathLine = L.polyline(latlngs, {color: '#4caf50', weight: 6, opacity: 0.9 }).addTo(map);
                 map.fitBounds(pathLine.getBounds());
+
+                // Build step-by-step directions
+                let directionsHtml = `
+                    <h3>Route Found!</h3>
+                    <p><strong>Path:</strong> ${data.path.join(' &rarr; ')}</p>
+                    <p><strong>Total Distance:</strong> ${data.distance} meters</p>
+                    <p><strong>Est. Time:</strong> ${data.time} minutes</p>
+                    <p><strong>Algorithm:</strong> ${algorithm} (Nodes Explored: ${data.nodes_explored})</p>
+                    <h4>Directions:</h4>
+                `;
+                
+                // Iterate through the path_details to create each step
+                data.path_details.forEach((step, index) => {
+                    // Start of the step container
+                    directionsHtml += `<div class="path-step">`;
+                    
+                    // Add the image if available
+                    if (step.image) {
+                        // Corrected: Use the STATIC_URL_PREFIX from Flask
+                        const imageUrl = STATIC_URL_PREFIX + step.image;
+                        directionsHtml += `<img src="${imageUrl}" alt="${step.location}" class="step-image">`;
+                    } else {
+                        // Optional: Add a placeholder if no image exists
+                        directionsHtml += `<img src="${STATIC_URL_PREFIX}placeholder.jpg" alt="No image for ${step.location}" class="step-image">`; // You'd need a placeholder.jpg
+                    }
+                    
+                    // Add the text information
+                    directionsHtml += `<div class="step-info">`;
+                    directionsHtml += `<h4>${index + 1}. At ${step.location}</h4>`;
+                    if (step.direction) {
+                        directionsHtml += `<p>${step.direction}</p>`;
+                    } else {
+                        directionsHtml += `<p>You have reached your final destination: ${step.location}!</p>`;
+                    }
+                    directionsHtml += `</div>`; // Close step-info
+                    
+                    directionsHtml += `</div>`; // Close path-step
+                });
+
+                resultsDiv.innerHTML = directionsHtml;
 
             } catch (error) {
                 console.error('Error finding path:', error);
