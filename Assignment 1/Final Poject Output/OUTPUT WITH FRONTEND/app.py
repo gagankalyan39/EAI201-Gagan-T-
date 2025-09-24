@@ -1,7 +1,7 @@
 import collections
 import heapq
 import math
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, url_for
 
 # ====================================================================
 # 1. CAMPUS GEOMETRY AND DATA
@@ -62,24 +62,31 @@ campus_graph = {
     'Hostel Building 1': [('Hostel Building 2', 250, 1.0), ('Food Court', 130, 1.0), ('Exit Gate', 420, 1.0)],
 }
 
-# Co-ordinates for A* search, now mirrored on the x-axis.
+# Adjusted coordinates for A* search based on visual analysis of the map.
+# The origin (0,0) is roughly the Security Gate.
 building_coords = {
-    'Entry Gate': (0, -180),
-    'Exit Gate': (-360, -180),
-    'Security Gate': (-180, 0),
-    'Flag Post': (-180, 50),
-    'Academic Block 1 Entrance': (-180, 260),
-    'Library': (-170, 260),
-    'Auditorium': (-180, 260),
-    'Admissions': (-180, 310),
-    'Registrar Office': (-180, 320),
-    'Finance Dept': (-190, 320),
-    'Cafeteria': (-190, 260),
-    'Lawn Area': (-180, 400),
-    'Academic Block 2': (-180, 540),
-    'Food Court': (-420, 540),
-    'Hostel Building 1': (-660, 700),
-    'Hostel Building 2': (-230, 600)
+    'Entry Gate': (180, -140),
+    'Exit Gate': (-220, -120),
+    'Security Gate': (0, 0),
+    'Flag Post': (0, 70),
+    
+    # Locations in Academic Block 1
+    'Academic Block 1 Entrance': (0, 200),
+    'Library': (-30, 220),
+    'Auditorium': (30, 220),
+    'Admissions': (-10, 280),
+    'Registrar Office': (10, 280),
+    'Finance Dept': (20, 290),
+    'Cafeteria': (-50, 200),
+
+    # Other Campus Locations
+    'Lawn Area': (-80, 300),
+    'Academic Block 2': (-150, 420),
+    'Food Court': (-180, 520),
+    'Hostel Building 2': (-250, 480),
+    'Hostel Building 1': (-250, 680),
+    'cricket ground': (-350, 680),
+    'sports path': (-200, 600)
 }
 
 # Short descriptions for each location.
@@ -100,6 +107,30 @@ building_info = {
     'Hostel Building 2': "One of the two main residential buildings.",
     'Food Court': "The main campus food court.",
     'Hostel Building 1': "One of the main residential buildings.",
+    'cricket ground': "The main campus cricket ground.",
+    'sports path': "A winding path that connects various sports facilities."
+}
+
+# Dictionary to store image filenames for each location.
+location_images = {
+    'Entry Gate': 'entry_gate.jpg',
+    'Exit Gate': 'exit_gate.jpg',
+    'Security Gate': 'security_gate.jpg',
+    'Flag Post': 'flag_post.jpg',
+    'Academic Block 1 Entrance': 'academic_block_1_entrance.jpg',
+    'Library': 'library.jpg',
+    'Auditorium': 'auditorium.jpg',
+    'Admissions': 'admissions.jpg',
+    'Registrar Office': 'registrar_office.jpg',
+    'Finance Dept': 'finance_dept.jpg',
+    'Cafeteria': 'cafeteria.jpg',
+    'Lawn Area': 'lawn_area.jpg',
+    'Academic Block 2': 'academic_block_2.jpg',
+    'Food Court': 'food_court.jpg',
+    'Hostel Building 2': 'hostel_building_2.jpg',
+    'Hostel Building 1': 'hostel_building_1.jpg',
+    'cricket ground': 'cricket_ground.jpg',
+    'sports path': 'sports_path.jpg'
 }
 
 # Average walking speed.
@@ -113,7 +144,7 @@ def calculate_time(distance):
 
 # ====================================================================
 # 2. PATHFINDING ALGORITHMS
-# ====================================================================
+# =====================================================================
 
 def bfs(start, goal):
     """Breadth-First Search (BFS) explores the graph layer by layer."""
@@ -202,13 +233,13 @@ algorithms = {
 
 # ====================================================================
 # 3. FLASK APPLICATION AND API ENDPOINTS
-# ====================================================================
+# =====================================================================
 
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', static_url=url_for('static', filename=''))
 
 @app.route('/api/navigate', methods=['POST'])
 def api_navigate():
@@ -234,15 +265,26 @@ def api_navigate():
     # Flip the y-coordinates for Leaflet's simple CRS
     flipped_coords = [(x, -y) for x, y in path_coords]
 
-    directions = []
-    for i in range(len(path) - 1):
+    # Create the detailed path with images and directions
+    path_details = []
+    for i in range(len(path)):
         location = path[i]
-        next_location = path[i+1]
-        edge = next((edge_dist for neighbor, edge_dist, _ in campus_graph.get(location, []) if neighbor == next_location), None)
-        if edge is not None:
-            directions.append(f"From {location}, walk {edge} meters to {next_location}.")
-        else:
-            directions.append(f"From {location}, proceed to {next_location}.")
+        next_location = None
+        direction = ""
+        
+        if i < len(path) - 1:
+            next_location = path[i+1]
+            edge = next((edge_dist for neighbor, edge_dist, _ in campus_graph.get(location, []) if neighbor == next_location), None)
+            if edge is not None:
+                direction = f"From {location}, walk {edge} meters to {next_location}."
+            else:
+                direction = f"From {location}, proceed to {next_location}."
+
+        path_details.append({
+            "location": location,
+            "image": location_images.get(location, None),
+            "direction": direction
+        })
 
     return jsonify({
         "path": path,
@@ -250,7 +292,7 @@ def api_navigate():
         "distance": round(distance, 2),
         "time": calculate_time(distance),
         "nodes_explored": nodes_explored,
-        "directions": directions
+        "path_details": path_details
     })
 
 @app.route('/api/buildings')
