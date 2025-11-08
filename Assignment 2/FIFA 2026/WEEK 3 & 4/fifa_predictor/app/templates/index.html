@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>FIFA 2026 Predictor</title>
+</head>
+<body style="font-family:Arial;max-width:760px;margin:auto;padding:20px;">
+  <h1 style="text-align:center;color:#0b6b4f;">FIFA 2026 Match Predictor</h1>
+
+  <form method="POST" action="/predict" style="background:#f9f9f9;padding:18px;border-radius:8px;">
+    <label>Team A</label><br>
+    <select name="team_a" required style="width:100%;padding:8px;margin-bottom:10px;">
+      <option value="" disabled selected>Select Team A</option>
+      {% for t in teams %}<option value="{{t}}">{{t}}</option>{% endfor %}
+    </select>
+
+    <label>Team B</label><br>
+    <select name="team_b" required style="width:100%;padding:8px;margin-bottom:10px;">
+      <option value="" disabled selected>Select Team B</option>
+      {% for t in teams %}<option value="{{t}}">{{t}}</option>{% endfor %}
+    </select>
+
+    <label>Host Country</label><br>
+    <select name="host_country" required style="width:100%;padding:8px;margin-bottom:10px;">
+      <option value="" disabled selected>Select Host Country</option>
+      {% for h in hosts %}<option value="{{h}}">{{h}}</option>{% endfor %}
+    </select>
+
+    <button type="submit" style="padding:10px 18px;background:#0b6b4f;color:white;border:none;border-radius:6px;">Predict</button>
+  </form>
+
+  {% if error %}<div style="color:red;margin-top:12px;">{{error}}</div>{% endif %}
+
+  {% if result %}
+  <div style="margin-top:18px;padding:15px;background:#e8f7f1;border-radius:8px;">
+    <h2>Prediction</h2>
+    <p>{{result}}</p>
+    <h3>Win Probabilities</h3>
+    <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+      {% for k,v in probabilities.items() %}
+      <tr><td style="padding:8px;border:1px solid #ddd;"><b>{{k}}</b></td><td style="padding:8px;border:1px solid #ddd;text-align:right;">{{v}}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+</body>
+</html>
