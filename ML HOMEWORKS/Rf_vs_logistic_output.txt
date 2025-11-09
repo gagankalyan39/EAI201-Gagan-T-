@@ -1,0 +1,4 @@
+RF Accuracy: 1.0
+Logistic Accuracy: 1.0
+RF CV Mean: 0.96
+Logistic CV Mean: 0.9733
