@@ -1,0 +1,4 @@
+Accuracy: 0.6667
+Confusion Matrix:
+ [[1 0]
+ [1 1]]

@@ -1,0 +1,4 @@
+Accuracy: 1.0
+Confusion Matrix:
+ [[26  0]
+ [ 0 19]]
